@@ -48,24 +48,24 @@ func main() {
 		}
 	}()
 
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSHandshakeTimeout:   15 * time.Second,
-			ResponseHeaderTimeout: 16 * time.Second,
-			MaxIdleConnsPerHost:   15,
-			DisableKeepAlives:     false,
-			MaxIdleConns:          100,
-			IdleConnTimeout:       16 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-	}
-
 	var r io.Reader
 	if *url != "" {
+		client := &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+			Timeout: 15 * time.Second,
+			Transport: &http.Transport{
+				TLSHandshakeTimeout:   15 * time.Second,
+				ResponseHeaderTimeout: 16 * time.Second,
+				MaxIdleConnsPerHost:   15,
+				DisableKeepAlives:     false,
+				MaxIdleConns:          100,
+				IdleConnTimeout:       16 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		}
+
 		req, err := http.NewRequest("GET", *url, nil)
 		if err != nil {
 			log.Fatalf("could not create request: %v", err)
