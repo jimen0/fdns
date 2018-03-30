@@ -9,7 +9,8 @@ Package **fdns** parses [Rapid7](https://www.rapid7.com/) [Forward DNS](https://
 ## Install
 
 ```
-go get -u github.com/jimen0/fdns/cmd/...
+go get -u github.com/jimen0/fdns
+go build cmd/fdns
 ```
 
 ## Usage
@@ -32,7 +33,7 @@ go get -u github.com/jimen0/fdns/cmd/...
 [![asciicast](https://asciinema.org/a/lE3p8BLDcCOk5uOaRRDhbzDVY.png)](https://asciinema.org/a/lE3p8BLDcCOk5uOaRRDhbzDVY)
 
 ```
-fdns -t 50 -domain yahoo.com -file $HOME/2018-02-18-1518940801-fdns_any.json.gz -record A
+./fdns -t 50 -domain yahoo.com -file $HOME/2018-02-18-1518940801-fdns_any.json.gz -record A
 ```
 
 ## Test
