@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/jimen0/fdns"
 )
@@ -50,21 +49,7 @@ func main() {
 
 	var r io.Reader
 	if *url != "" {
-		client := &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-			Timeout: 15 * time.Second,
-			Transport: &http.Transport{
-				TLSHandshakeTimeout:   15 * time.Second,
-				ResponseHeaderTimeout: 16 * time.Second,
-				MaxIdleConnsPerHost:   15,
-				DisableKeepAlives:     false,
-				MaxIdleConns:          100,
-				IdleConnTimeout:       16 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-		}
+		client := &http.Client{}
 
 		req, err := http.NewRequest("GET", *url, nil)
 		if err != nil {
@@ -88,7 +73,7 @@ func main() {
 
 	parser, err := fdns.NewParser(*record)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("could not create parser: %v\n", err)
 	}
 
 	out := make(chan string)
@@ -105,8 +90,7 @@ func main() {
 
 	select {
 	case err := <-errs:
-		fmt.Fprintf(os.Stderr, err.Error())
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "could not parse: %v", err)
 	case <-done:
 	}
 }

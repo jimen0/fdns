@@ -81,8 +81,8 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 			default: // avoid blocking
 			}
 
+			var e entry
 			for v := range c {
-				var e entry
 				if err := json.Unmarshal(v, &e); err != nil {
 					errs <- err
 					done <- struct{}{}
