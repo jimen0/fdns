@@ -2,14 +2,15 @@ package fdns
 
 import (
 	"bufio"
-	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/a8m/djson"
+	"github.com/klauspost/pgzip"
 )
 
 // Parser interface represents a FDNS dataset parser.
@@ -38,23 +39,10 @@ func NewParser(record string) (Parser, error) {
 	return p, nil
 }
 
-type entry struct {
-	// Name is the DNS address.
-	Name string `json:"name"`
-	// Timestamp is the time when entry was collected.
-	Timestamp string `json:"timestamp"`
-	// Value is the record: "a", "cname", etc.
-	Type string `json:"type"`
-	// Value is the address where it resolves to.
-	// 	If Type is "A", then Value is an IP address.
-	//	If Type is "cname" then Value is a domain.
-	Value string `json:"value"`
-}
-
 func parse(ctx context.Context, record string, domain string, workers int, r io.Reader, out chan<- string, errs chan<- error) {
 	defer close(out)
 
-	gz, err := gzip.NewReader(r)
+	gz, err := pgzip.NewReader(r)
 	if err != nil {
 		errs <- err
 		return
@@ -81,15 +69,18 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 			default: // avoid blocking
 			}
 
-			var e entry
 			for v := range c {
-				if err := json.Unmarshal(v, &e); err != nil {
+				res, err := djson.DecodeObject(v)
+				if err != nil {
 					errs <- err
 					done <- struct{}{}
 					return
 				}
-				if e.Type == record && strings.HasSuffix(e.Name, domain) {
-					out <- e.Value
+
+				if res["type"].(string) == record {
+					if strings.HasSuffix(res["name"].(string), domain) {
+						out <- res["value"].(string)
+					}
 				}
 			}
 		}(ch)
