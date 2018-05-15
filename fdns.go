@@ -97,15 +97,11 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 		default: // avoid blocking.
 		}
 
-		b := sc.Bytes()
-		aux := make([]byte, len(b))
-		_ = copy(aux, b)
-
-		chans[current%workers] <- aux
+		chans[current%workers] <- sc.Bytes()
 		current++
 	}
 
-	if err := sc.Err(); err != nil && err != io.EOF {
+	if err := sc.Err(); err != nil {
 		errs <- err
 		done <- struct{}{}
 		return
