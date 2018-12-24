@@ -81,6 +81,14 @@ func main() {
 	done := make(chan struct{})
 
 	go parser.Parse(ctx, r, *domain, *routines, out, errs)
+	go func () {
+		for {
+			select {
+			case err := <- errs:
+				log.Printf("could not parse: %v", err)
+			}
+		}
+	}()
 	go func() {
 		for c := range out {
 			fmt.Println(c)
@@ -88,9 +96,5 @@ func main() {
 		done <- struct{}{}
 	}()
 
-	select {
-	case err := <-errs:
-		fmt.Fprintf(os.Stderr, "could not parse: %v", err)
-	case <-done:
-	}
+	<-done
 }

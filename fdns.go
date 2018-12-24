@@ -39,7 +39,7 @@ func NewParser(record string) (Parser, error) {
 	return p, nil
 }
 
-func parse(ctx context.Context, record string, domain string, workers int, r io.Reader, out chan<- string, errs chan<- error) {
+func parse(ctx context.Context, record, domain string, workers int, r io.Reader, out chan<- string, errs chan<- error) {
 	defer close(out)
 
 	gz, err := pgzip.NewReader(r)
@@ -73,8 +73,7 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 				res, err := djson.DecodeObject(v)
 				if err != nil {
 					errs <- err
-					done <- struct{}{}
-					return
+					continue
 				}
 
 				if res["type"].(string) == record {
@@ -91,8 +90,6 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 	for sc.Scan() {
 		select {
 		case <-ctx.Done():
-			errs <- ctx.Err()
-			done <- struct{}{}
 			return
 		default: // avoid blocking.
 		}
@@ -102,15 +99,14 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 	}
 
 	if err := sc.Err(); err != nil {
-		errs <- err
-		done <- struct{}{}
+		errs <- fmt.Errorf("could not scan: %v", err)
 		return
 	}
 
+	close(done)
 	for _, c := range chans {
 		close(c)
 	}
-
 	wg.Wait()
 }
 
