@@ -8,116 +8,63 @@ import (
 	"testing"
 )
 
-func TestNewParser(t *testing.T) {
-	tt := []struct {
-		name   string
-		domain string
-		record string
-		exp    Parser
-	}{
-		{
-			name:   "cname",
-			domain: "foo.tld",
-			record: "CNAME",
-			exp:    cname{},
-		},
-		{
-			name:   "a",
-			domain: "foo.tld",
-			record: "A",
-			exp:    a{},
-		},
-		{
-			name:   "ns",
-			domain: "foo.tld",
-			record: "NS",
-			exp:    ns{},
-		},
-		{
-			name:   "nil",
-			domain: "foo.tld",
-			record: "notfound",
-			exp:    nil,
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			out, err := NewParser(tc.record)
-			if err != nil && tc.exp != nil {
-				t.Fatalf("failed to create parser: %v", err)
-			}
-			if out != tc.exp {
-				t.Fatalf("expected %v got %v", tc.exp, out)
-			}
-		})
-	}
-}
-
 func TestParse(t *testing.T) {
 	tt := []struct {
 		name    string
-		parser  Parser
-		ctx     context.Context
+		input   string
 		domain  string
-		in      string
+		f       ParseFunc
 		workers int
 		exp     []string
 	}{
 		{
 			name:    "cname 1 worker",
-			parser:  cname{},
-			ctx:     context.Background(),
-			in:      `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}`,
+			input:   `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}`,
 			domain:  "foo.tld",
+			f:       CNAME,
 			workers: 1,
-			exp:     []string{"cluster007.bar.tld"},
+			exp:     []string{"reseauocoz.cluster007.foo.tld"},
 		},
 		{
-			name:   "cname 2 workers",
-			parser: cname{},
-			ctx:    context.Background(),
-			in: `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}
+			name: "cname 2 workers",
+			input: `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}
 			{"timestamp": "1492468299","name": "reseauocoz.cluster008.foo.tld", "type": "cname", "value": "cluster008.bar.tld"}
 			{"timestamp": "1492468299","name": "reseauocoz.cluster009.foo.tld", "type": "cname", "value": "cluster009.bar.tld"}`,
 			domain:  "foo.tld",
+			f:       CNAME,
 			workers: 2,
-			exp:     []string{"cluster007.bar.tld", "cluster008.bar.tld", "cluster009.bar.tld"},
+			exp:     []string{"reseauocoz.cluster007.foo.tld", "reseauocoz.cluster008.foo.tld", "reseauocoz.cluster009.foo.tld"},
 		},
 		{
 			name:    "a 1 worker",
-			parser:  a{},
-			ctx:     context.Background(),
-			in:      `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "a", "value": "127.0.0.1"}`,
+			input:   `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "a", "value": "127.0.0.1"}`,
 			domain:  "foo.tld",
+			f:       A,
 			workers: 1,
 			exp:     []string{"127.0.0.1"},
 		},
 		{
-			name:   "a 3 workers 2 entries",
-			parser: a{},
-			ctx:    context.Background(),
-			in: `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "a", "value": "127.0.0.1"}
+			name: "a 3 workers 2 entries",
+			input: `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "a", "value": "127.0.0.1"}
 			{"timestamp": "1492468299","name": "reseauocoz.cluster008.foo.tld", "type": "a", "value": "127.0.0.2"}`,
 			domain:  "foo.tld",
+			f:       A,
 			workers: 3,
 			exp:     []string{"127.0.0.1", "127.0.0.2"},
 		},
 		{
 			name:    "ns 1 worker",
-			parser:  ns{},
-			ctx:     context.Background(),
-			in:      `{"timestamp": "1492468299","name": "ns.cdn.foo.tld", "type": "ns", "value": "ns.internal.foo.tld"}`,
+			input:   `{"timestamp": "1492468299","name": "ns.cdn.foo.tld", "type": "ns", "value": "ns.internal.foo.tld"}`,
 			domain:  "foo.tld",
+			f:       NS,
 			workers: 1,
-			exp:     []string{"ns.internal.foo.tld"},
+			exp:     []string{"ns.cdn.foo.tld"},
 		},
 		{
 			name:    "invalid JSON",
-			parser:  cname{},
-			ctx:     context.Background(),
-			in:      `{invalidJSON"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}`,
+			input:   `{invalidJSON"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}`,
 			domain:  "foo.tld",
+			f:       CNAME,
 			workers: 1,
 			exp:     nil,
 		},
@@ -129,7 +76,7 @@ func TestParse(t *testing.T) {
 			errs := make(chan error)
 			done := make(chan struct{})
 
-			go tc.parser.Parse(tc.ctx, bytes.NewReader(encode(t, tc.in)), tc.domain, tc.workers, out, errs)
+			p := NewParser(tc.domain, tc.workers, tc.f)
 
 			var res []string
 			go func() {
@@ -139,6 +86,7 @@ func TestParse(t *testing.T) {
 				done <- struct{}{}
 			}()
 
+			go p.Parse(context.Background(), bytes.NewReader(encode(t, tc.input)), out, errs)
 			select {
 			case err := <-errs:
 				if tc.exp != nil {
@@ -148,7 +96,7 @@ func TestParse(t *testing.T) {
 			}
 
 			if !equal(t, tc.exp, res) {
-				t.Fatalf("expected %v got %v", tc.exp, res)
+				t.Fatalf("expected %q got %q", tc.exp, res)
 			}
 		})
 	}
