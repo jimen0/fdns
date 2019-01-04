@@ -16,7 +16,7 @@ go build cmd/fdns
 ## Usage
 
 ```
-➜  fdns git:(master) ✗ ./fdns
+➜  cmd git:(master) ✗ ./fdns
   -domain string
     	domain of which subdomains are discovered
   -file string
@@ -27,6 +27,8 @@ go build cmd/fdns
     	number of goroutines (default 50)
   -url string
     	URL of the dataset (can't be used with file)
+  -verbose
+    	enable verbose error messages
 
 ```
 
