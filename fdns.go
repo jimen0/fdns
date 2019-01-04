@@ -118,7 +118,7 @@ func (p *Parser) Parse(ctx context.Context, r io.Reader, out chan<- string, errs
 		default: // avoid blocking.
 		}
 
-		lines <- sc.Bytes()
+		lines <- append([]byte{}, sc.Bytes()...)
 		current++
 	}
 
