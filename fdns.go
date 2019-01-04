@@ -2,88 +2,111 @@ package fdns
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
-	"sync"
-
-	"github.com/a8m/djson"
-	"github.com/klauspost/pgzip"
 )
 
-// Parser interface represents a FDNS dataset parser.
-type Parser interface {
-	// Parse parses the dataset and sends valid records for any subdomain of
-	// the domain through the channel.
-	Parse(ctx context.Context, r io.Reader, domain string, workers int, out chan<- string, errors chan<- error)
-}
+// ErrWrongType is the error returned when the parsed entry contains an invalid
+// record type.
+var ErrWrongType = errors.New("incorrect record type")
 
-// NewParser returns a FDNS parser that reports entries for the given record.
-func NewParser(record string) (Parser, error) {
-	var p Parser
-	switch record {
-	case "A":
-		p = a{}
-	case "CNAME":
-		p = cname{}
-	case "NS":
-		p = ns{}
-	case "PTR":
-		p = ptr{}
-	default:
-		return nil, errors.New("unsupported record type")
+// ParseFunc defines how a parsing function must work.
+type ParseFunc func(e entry) (string, error)
+
+// A reports DNS A records for the given domain.
+func A(e entry) (string, error) {
+	if e.Type != "a" {
+		return "", ErrWrongType
 	}
-
-	return p, nil
+	return e.Value, nil
 }
 
-func parse(ctx context.Context, record string, domain string, workers int, r io.Reader, out chan<- string, errs chan<- error) {
+// CNAME reports DNS CNAME records for the given domain.
+func CNAME(e entry) (string, error) {
+	if e.Type != "cname" {
+		return "", ErrWrongType
+	}
+	return e.Name, nil
+}
+
+// NS reports DNS NS records for the given domain.
+func NS(e entry) (string, error) {
+	if e.Type != "ns" {
+		return "", ErrWrongType
+	}
+	return e.Name, nil
+}
+
+// PTR reports DNS PTR records for the given domain.
+func PTR(e entry) (string, error) {
+	if e.Type != "ptr" {
+		return "", ErrWrongType
+	}
+	return e.Name, nil
+}
+
+// Parser object allows parsing datasets looking for records related with a domain.
+type Parser struct {
+	domain string
+	// parse defines how the parser looks for results.
+	parse ParseFunc
+	// workers is the numer of simultaneous goroutines the parser will use.
+	workers int
+}
+
+// Parse reads from the given io.Reader and reports results and errors.
+func (p *Parser) Parse(ctx context.Context, r io.Reader, out chan<- string, errs chan<- error) {
 	defer close(out)
 
-	gz, err := pgzip.NewReader(r)
+	gz, err := gzip.NewReader(r)
 	if err != nil {
 		errs <- err
 		return
 	}
 	defer gz.Close()
 
-	var wg sync.WaitGroup
-	wg.Add(workers)
-
+	lines := make(chan []byte)
 	done := make(chan struct{})
-	chans := make([]chan []byte, workers)
-	for i := 0; i < len(chans); i++ {
-		chans[i] = make(chan []byte)
-	}
+	finished := make(chan struct{}, p.workers)
 
-	domain = fmt.Sprintf(".%s", domain)
-	for _, ch := range chans {
-		go func(c chan []byte) {
-			defer wg.Done()
+	domain := fmt.Sprintf(".%s", p.domain)
+	for i := 0; i < p.workers; i++ {
+		go func() {
+			var e entry
 
-			select {
-			case <-done:
-				return
-			default: // avoid blocking
-			}
-
-			for v := range c {
-				res, err := djson.DecodeObject(v)
-				if err != nil {
-					errs <- err
-					done <- struct{}{}
+			for {
+				select {
+				case <-done:
+					finished <- struct{}{}
 					return
-				}
-
-				if res["type"].(string) == record {
-					if strings.HasSuffix(res["name"].(string), domain) {
-						out <- res["value"].(string)
+				case v := <-lines:
+					if err := json.Unmarshal(v, &e); err != nil {
+						errs <- fmt.Errorf("could not decode JSON object: %v", err)
+						continue
 					}
+
+					if !strings.HasSuffix(e.Name, domain) {
+						continue
+					}
+
+					rec, err := p.parse(e)
+					if err == ErrWrongType {
+						// it's not the interesting record type.
+						continue
+					}
+					if err != nil {
+						errs <- fmt.Errorf("could not parse object: %v", err)
+						continue
+					}
+					out <- rec
 				}
 			}
-		}(ch)
+		}()
 	}
 
 	sc := bufio.NewScanner(gz)
@@ -91,57 +114,26 @@ func parse(ctx context.Context, record string, domain string, workers int, r io.
 	for sc.Scan() {
 		select {
 		case <-ctx.Done():
-			errs <- ctx.Err()
-			done <- struct{}{}
-			return
+			break
 		default: // avoid blocking.
 		}
 
-		chans[current%workers] <- sc.Bytes()
+		lines <- append([]byte{}, sc.Bytes()...)
 		current++
 	}
 
 	if err := sc.Err(); err != nil {
-		errs <- err
-		done <- struct{}{}
+		errs <- fmt.Errorf("could not scan: %v", err)
 		return
 	}
+	close(done)
 
-	for _, c := range chans {
-		close(c)
+	for i := 0; i < p.workers; i++ {
+		<-finished
 	}
-
-	wg.Wait()
 }
 
-// a is a dataset parser that reports A records.
-type a struct{}
-
-// Parse parses the dataset and reports valid A records of any subdomain.
-func (rec a) Parse(ctx context.Context, r io.Reader, domain string, workers int, out chan<- string, errors chan<- error) {
-	parse(ctx, "a", domain, workers, r, out, errors)
-}
-
-// cname is a dataset parser that reports CNAME records.
-type cname struct{}
-
-// Parse parses the dataset and reports valid CNAME records of any subdomain.
-func (rec cname) Parse(ctx context.Context, r io.Reader, domain string, workers int, out chan<- string, errors chan<- error) {
-	parse(ctx, "cname", domain, workers, r, out, errors)
-}
-
-// ns is a dataset parser that reports NS records.
-type ns struct{}
-
-// Parse parses the dataset and reports valid NS records of any subdomain.
-func (rec ns) Parse(ctx context.Context, r io.Reader, domain string, workers int, out chan<- string, errors chan<- error) {
-	parse(ctx, "ns", domain, workers, r, out, errors)
-}
-
-// ptr is a dataset parser that reports PTR records.
-type ptr struct{}
-
-// Parse parses the dataset and reports valid PTR records of any subdomain.
-func (rec ptr) Parse(ctx context.Context, r io.Reader, domain string, workers int, out chan<- string, errors chan<- error) {
-	parse(ctx, "ptr", domain, workers, r, out, errors)
+// NewParser returns a FDNS parser that reports entries for the given record.
+func NewParser(domain string, workers int, f ParseFunc) *Parser {
+	return &Parser{domain: domain, parse: f, workers: workers}
 }

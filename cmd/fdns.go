@@ -19,12 +19,31 @@ func main() {
 	url := flag.String("url", "", "URL of the dataset (can't be used with file)")
 	record := flag.String("record", "", "record that will be parsed A|CNAME|NS|PTR")
 	domain := flag.String("domain", "", "domain of which subdomains are discovered")
+	verbose := flag.Bool("verbose", false, "enable verbose error messages")
 
 	flag.Parse()
 
 	if (*file != "" && *url != "") || (*file == "" && *url == "") {
 		flag.PrintDefaults()
-		os.Exit(1)
+		return
+	}
+
+	var l logger
+	l = silentLogger{}
+	if *verbose {
+		l = verboseLogger{}
+	}
+
+	var parsers = map[string]fdns.ParseFunc{
+		"A":     fdns.A,
+		"CNAME": fdns.CNAME,
+		"NS":    fdns.NS,
+		"PTR":   fdns.PTR,
+	}
+	parseFunc, ok := parsers[*record]
+	if !ok {
+		flag.PrintDefaults()
+		return
 	}
 
 	ctx := context.Background()
@@ -71,16 +90,20 @@ func main() {
 		r = f
 	}
 
-	parser, err := fdns.NewParser(*record)
-	if err != nil {
-		log.Fatalf("could not create parser: %v\n", err)
-	}
-
+	parser := fdns.NewParser(*domain, *routines, parseFunc)
 	out := make(chan string)
 	errs := make(chan error)
 	done := make(chan struct{})
 
-	go parser.Parse(ctx, r, *domain, *routines, out, errs)
+	go parser.Parse(ctx, r, out, errs)
+	go func() {
+		for {
+			select {
+			case err := <-errs:
+				l.Logf(os.Stderr, fmt.Sprintf("could not parse: %v", err), err)
+			}
+		}
+	}()
 	go func() {
 		for c := range out {
 			fmt.Println(c)
@@ -88,9 +111,19 @@ func main() {
 		done <- struct{}{}
 	}()
 
-	select {
-	case err := <-errs:
-		fmt.Fprintf(os.Stderr, "could not parse: %v", err)
-	case <-done:
-	}
+	<-done
+}
+
+type logger interface {
+	Logf(w io.Writer, format string, a ...interface{})
+}
+
+type silentLogger struct{}
+
+func (s silentLogger) Logf(w io.Writer, format string, a ...interface{}) {}
+
+type verboseLogger struct{}
+
+func (v verboseLogger) Logf(w io.Writer, format string, a ...interface{}) {
+	fmt.Fprintf(w, format, a...)
 }
