@@ -8,9 +8,10 @@ Package **fdns** parses [Rapid7](https://www.rapid7.com/) [Forward DNS](https://
 
 ## Install
 
-```
+```sh
 go get -u github.com/jimen0/fdns
-go build cmd/fdns
+cd $GOPATH/src/github.com/jimen0/fdns
+go build cmd/fdns.go
 ```
 
 ## Usage
