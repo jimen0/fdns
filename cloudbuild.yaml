@@ -1,0 +1,17 @@
+steps:
+  - name: 'gcr.io/cloud-builders/go'
+    args: ['test', './...']
+    env: ['PROJECT_ROOT=github.com/jimen0/fdns', 'CGO_ENABLED=1']
+
+  - name: 'gcr.io/cloud-builders/go'
+    args: ['build', '-tags', 'netgo', 'cmd/fdns/fdns.go']
+    env: ['PROJECT_ROOT=github.com/jimen0/fdns', 'CGO_ENABLED=0']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '--tag=gcr.io/$PROJECT_ID/fdns', '.']
+    timeout: 240s
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/fdns']
+
+images: ['gcr.io/$PROJECT_ID/fdns']
