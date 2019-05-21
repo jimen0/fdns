@@ -23,7 +23,7 @@ func A(e entry) (string, error) {
 	if e.Type != "a" {
 		return "", ErrWrongType
 	}
-	return e.Value, nil
+	return e.Name, nil
 }
 
 // CNAME reports DNS CNAME records for the given domain.

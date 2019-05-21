@@ -1,0 +1,5 @@
+.editorconfig
+.git
+README.md
+LICENSE.md
+cloudbuild.yaml

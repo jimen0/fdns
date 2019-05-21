@@ -41,7 +41,7 @@ func TestParse(t *testing.T) {
 			domain:  "foo.tld",
 			f:       A,
 			workers: 1,
-			exp:     []string{"127.0.0.1"},
+			exp:     []string{"reseauocoz.cluster007.foo.tld"},
 		},
 		{
 			name: "a 3 workers 2 entries",
@@ -50,7 +50,7 @@ func TestParse(t *testing.T) {
 			domain:  "foo.tld",
 			f:       A,
 			workers: 3,
-			exp:     []string{"127.0.0.1", "127.0.0.2"},
+			exp:     []string{"reseauocoz.cluster007.foo.tld", "reseauocoz.cluster008.foo.tld"},
 		},
 		{
 			name:    "ns 1 worker",
