@@ -13,7 +13,7 @@ func TestParse(t *testing.T) {
 		name    string
 		input   string
 		domain  string
-		f       ParseFunc
+		records []string
 		workers int
 		exp     []string
 	}{
@@ -21,7 +21,7 @@ func TestParse(t *testing.T) {
 			name:    "cname 1 worker",
 			input:   `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}`,
 			domain:  "foo.tld",
-			f:       CNAME,
+			records: []string{"cname"},
 			workers: 1,
 			exp:     []string{"reseauocoz.cluster007.foo.tld"},
 		},
@@ -31,7 +31,7 @@ func TestParse(t *testing.T) {
 			{"timestamp": "1492468299","name": "reseauocoz.cluster008.foo.tld", "type": "cname", "value": "cluster008.bar.tld"}
 			{"timestamp": "1492468299","name": "reseauocoz.cluster009.foo.tld", "type": "cname", "value": "cluster009.bar.tld"}`,
 			domain:  "foo.tld",
-			f:       CNAME,
+			records: []string{"cname"},
 			workers: 2,
 			exp:     []string{"reseauocoz.cluster007.foo.tld", "reseauocoz.cluster008.foo.tld", "reseauocoz.cluster009.foo.tld"},
 		},
@@ -39,7 +39,7 @@ func TestParse(t *testing.T) {
 			name:    "a 1 worker",
 			input:   `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "a", "value": "127.0.0.1"}`,
 			domain:  "foo.tld",
-			f:       A,
+			records: []string{"a"},
 			workers: 1,
 			exp:     []string{"reseauocoz.cluster007.foo.tld"},
 		},
@@ -48,7 +48,7 @@ func TestParse(t *testing.T) {
 			input: `{"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "a", "value": "127.0.0.1"}
 			{"timestamp": "1492468299","name": "reseauocoz.cluster008.foo.tld", "type": "a", "value": "127.0.0.2"}`,
 			domain:  "foo.tld",
-			f:       A,
+			records: []string{"a"},
 			workers: 3,
 			exp:     []string{"reseauocoz.cluster007.foo.tld", "reseauocoz.cluster008.foo.tld"},
 		},
@@ -56,17 +56,24 @@ func TestParse(t *testing.T) {
 			name:    "ns 1 worker",
 			input:   `{"timestamp": "1492468299","name": "ns.cdn.foo.tld", "type": "ns", "value": "ns.internal.foo.tld"}`,
 			domain:  "foo.tld",
-			f:       NS,
+			records: []string{"ns"},
 			workers: 1,
 			exp:     []string{"ns.cdn.foo.tld"},
+		},
+		{
+			name:    "aaaa 1 worker",
+			input:   `{"timestamp": "1492468299","name": "1087074.ostk.bm2.corp.ne1.foo.tld", "type": "aaaa", "value": "2001:4998:efeb:202::5001"}`,
+			domain:  "foo.tld",
+			records: []string{"aaaa"},
+			workers: 1,
+			exp:     []string{"1087074.ostk.bm2.corp.ne1.foo.tld"},
 		},
 		{
 			name:    "invalid JSON",
 			input:   `{invalidJSON"timestamp": "1492468299","name": "reseauocoz.cluster007.foo.tld", "type": "cname", "value": "cluster007.bar.tld"}`,
 			domain:  "foo.tld",
-			f:       CNAME,
+			records: []string{"cname"},
 			workers: 1,
-			exp:     nil,
 		},
 	}
 
@@ -76,7 +83,11 @@ func TestParse(t *testing.T) {
 			errs := make(chan error)
 			done := make(chan struct{})
 
-			p := NewParser(tc.domain, tc.workers, tc.f)
+			p := Parser{
+				Domains: []string{tc.domain},
+				Workers: tc.workers,
+				Records: tc.records,
+			}
 
 			var res []string
 			go func() {
@@ -99,6 +110,60 @@ func TestParse(t *testing.T) {
 				t.Fatalf("expected %q got %q", tc.exp, res)
 			}
 		})
+	}
+}
+
+func TestIsInterestingRecord(t *testing.T) {
+	tt := []struct {
+		name string
+		rec  string
+		exp  bool
+	}{
+		{
+			name: "interesting",
+			rec:  "a",
+			exp:  true,
+		},
+		{
+			name: "boring",
+			rec:  "ns",
+		},
+	}
+
+	for _, tc := range tt {
+		p := &Parser{Records: []string{"a"}}
+
+		got := p.IsInterestingRecord(entry{Type: tc.rec})
+		if tc.exp != got {
+			t.Fatalf("%s: expected %v got %v", tc.name, tc.exp, got)
+		}
+	}
+}
+
+func TestIsInterestingDomain(t *testing.T) {
+	tt := []struct {
+		name   string
+		domain string
+		exp    bool
+	}{
+		{
+			name:   "interesting",
+			domain: "bazz.example.com",
+			exp:    true,
+		},
+		{
+			name:   "boring",
+			domain: "bar.notexample.com",
+		},
+	}
+
+	for _, tc := range tt {
+		p := &Parser{Domains: []string{".example.com"}}
+
+		got := p.IsInterestingDomain(entry{Name: tc.domain})
+		if tc.exp != got {
+			t.Fatalf("%s: expected %v got %v", tc.name, tc.exp, got)
+		}
 	}
 }
 

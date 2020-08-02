@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -10,21 +9,23 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/jimen0/fdns"
+	flag "github.com/spf13/pflag"
+
+	"github.com/jimen0/fdns/v2"
 )
 
 func main() {
-	routines := flag.Int("t", 50, "number of goroutines")
+	goroutines := flag.Int("goroutines", 4, "number of goroutines")
 	file := flag.String("file", "", "path of the dataset (can't be used with url)")
 	url := flag.String("url", "", "URL of the dataset (can't be used with file)")
-	record := flag.String("record", "", "record that will be parsed A|CNAME|NS|PTR")
-	domain := flag.String("domain", "", "domain of which subdomains are discovered")
+	records := flag.StringSlice("records", []string{}, "records that will be parsed a|aaaa|cname|ns|ptr")
+	domains := flag.StringSlice("domains", []string{}, "domains of which subdomains are discovered")
 	verbose := flag.Bool("verbose", false, "enable verbose error messages")
 
 	flag.Parse()
 
 	if (*file != "" && *url != "") || (*file == "" && *url == "") {
-		flag.PrintDefaults()
+		flag.Usage()
 		return
 	}
 
@@ -32,18 +33,6 @@ func main() {
 	l = silentLogger{}
 	if *verbose {
 		l = verboseLogger{}
-	}
-
-	var parsers = map[string]fdns.ParseFunc{
-		"A":     fdns.A,
-		"CNAME": fdns.CNAME,
-		"NS":    fdns.NS,
-		"PTR":   fdns.PTR,
-	}
-	parseFunc, ok := parsers[*record]
-	if !ok {
-		flag.PrintDefaults()
-		return
 	}
 
 	ctx := context.Background()
@@ -66,21 +55,28 @@ func main() {
 		}
 	}()
 
-	var r io.Reader
+	var r io.ReadCloser
 	if *url != "" {
-		client := &http.Client{}
+		client := http.DefaultClient
 
-		req, err := http.NewRequest("GET", *url, nil)
+		req, err := http.NewRequest(http.MethodGet, *url, nil)
 		if err != nil {
 			log.Fatalf("could not create request: %v", err)
 		}
 		req = req.WithContext(ctx)
+		req.Header.Set("user-agent", "fdns github.com/jimen0/fdns")
 
+		// Remove the bodyclose's linter false positive here.
+		//
+		//nolint:bodyclose
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Fatalf("could not request: %v", err)
+			log.Fatalf("could not request %q: %v", req.URL.String(), err)
 		}
-		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			log.Fatalf("got status code %d from %q but expected %d", resp.StatusCode, req.URL.String(), http.StatusOK)
+		}
+
 		r = resp.Body
 	} else {
 		f, err := os.Open(*file)
@@ -89,19 +85,21 @@ func main() {
 		}
 		r = f
 	}
+	defer r.Close()
 
-	parser := fdns.NewParser(*domain, *routines, parseFunc)
+	parser := &fdns.Parser{
+		Domains: *domains,
+		Workers: *goroutines,
+		Records: *records,
+	}
 	out := make(chan string)
 	errs := make(chan error)
 	done := make(chan struct{})
 
 	go parser.Parse(ctx, r, out, errs)
 	go func() {
-		for {
-			select {
-			case err := <-errs:
-				l.Logf(os.Stderr, fmt.Sprintf("could not parse: %v", err), err)
-			}
+		for err := range errs {
+			l.Logf(os.Stderr, "could not parse: %v", err)
 		}
 	}()
 	go func() {
