@@ -1,6 +1,6 @@
 ## fdns
 
-[![pkg.go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/jimen0/fdns)
+[![pkg.go.dev reference](https://img.shields.io/badge/go.dev-reference-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/jimen0/fdns/v2)
 
 Package **fdns** parses [Rapid7](https://www.rapid7.com/) [Forward DNS](https://github.com/rapid7/sonar/wiki/Forward-DNS) dataset in a concurrent way. The parser reports found entries (subdomains, IP addresses, records, etc) for the given record and domain.
 
@@ -9,7 +9,7 @@ Behaviour has changed since the project was created. Now `A` record reports DNS 
 ### Install
 
 ```console
-go get -u github.com/jimen0/fdns@v2.0.0
+go get -v github.com/jimen0/fdns/v2
 cd $GOPATH/src/github.com/jimen0/fdns/cmd/fdns
 go install
 ```
@@ -62,4 +62,4 @@ Just run `go test -race -v ./...` inside of the project's root folder.
 
 ### Improvements
 
-Submit a PR or open an issue. Just make sure that your PR passes `gofmt`, `golint` and `govet`.
+Submit a PR or open an issue. Just make sure that your PR passes `gofmt`, `golint` and `go vet`.
