@@ -9,9 +9,8 @@ Behaviour has changed since the project was created. Now `A` record reports DNS 
 ### Install
 
 ```console
-go get -v github.com/jimen0/fdns/v2
-cd $GOPATH/src/github.com/jimen0/fdns/cmd/fdns
-go install
+go get -v github.com/jimen0/fdns/v2/cmd/fdns
+fdns
 ```
 
 ### Run with Docker
@@ -37,7 +36,7 @@ Usage of fdns:
       --verbose           enable verbose error messages
 ```
 
-<a href="https://asciinema.org/a/QcyHYCj3z13hn34zoshNshO3x?autoplay=1"><img src="https://asciinema.org/a/QcyHYCj3z13hn34zoshNshO3x.png" width="70%"/></a>
+<a href="https://asciinema.org/a/QcyHYCj3z13hn34zoshNshO3x?autoplay=1"><img src="https://asciinema.org/a/QcyHYCj3z13hn34zoshNshO3x.png"/></a>
 
 
 ```console
