@@ -9,8 +9,7 @@ Behaviour has changed since the project was created. Now `A` record reports DNS 
 ### Install
 
 ```console
-# If you have $GOPATH set.
-go get -v github.com/jimen0/fdns/cmd/fdns
+go install github.com/jimen0/fdns/v2/cmd/fdns@latest
 fdns
 ```
 
