@@ -1,4 +1,4 @@
-FROM golang:1.14-alpine as builder
+FROM golang:1.16-alpine as builder
 
 RUN apk add --no-cache ca-certificates git
 
@@ -12,7 +12,7 @@ WORKDIR /src/cmd/fdns
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a --ldflags '-s -w -extldflags "-static"' -tags netgo -installsuffix netgo -o /fdns
 
 
-FROM alpine:3.9
+FROM alpine:3
 
 RUN apk --no-cache add ca-certificates
 
