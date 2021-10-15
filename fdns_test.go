@@ -2,10 +2,11 @@ package fdns
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"reflect"
 	"testing"
+
+	"github.com/klauspost/pgzip"
 )
 
 func TestParse(t *testing.T) {
@@ -167,6 +168,33 @@ func TestIsInterestingDomain(t *testing.T) {
 	}
 }
 
+func TestSubstring(t *testing.T) {
+	tt := []struct {
+		sb     string
+		domain string
+		exp    bool
+	}{
+		{
+			sb:     "interesting",
+			domain: "bazz.interestingexample.com",
+			exp:    true,
+		},
+		{
+			sb:     "boring",
+			domain: "bar.notexample.com",
+		},
+	}
+
+	for _, tc := range tt {
+		p := &Parser{Substrings: []string{"interesting"}, Records: []string{"a"}}
+
+		got := p.Substring(entry{Name: tc.domain, Type: "A", Value: "0.0.0.0"})
+		if tc.exp != got {
+			t.Fatalf("expected %v got %v for substring %q and domain %q", tc.exp, got, tc.sb, tc.domain)
+		}
+	}
+}
+
 func equal(t *testing.T, a, b []string) bool {
 	t.Helper()
 	m1 := make(map[string]struct{}, len(a))
@@ -186,7 +214,7 @@ func encode(t *testing.T, s string) []byte {
 	t.Helper()
 
 	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
+	gz := pgzip.NewWriter(&b)
 	if _, err := gz.Write([]byte(s)); err != nil {
 		t.Fatal(err)
 	}

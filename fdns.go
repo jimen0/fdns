@@ -2,19 +2,22 @@ package fdns
 
 import (
 	"bufio"
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/klauspost/pgzip"
 )
 
 // Parser object allows parsing datasets looking for records related with a domain.
 type Parser struct {
 	Domains []string
-	// Records stores the records that are reported.
+	// Records stores reported records.
 	Records []string
+	// Substrings stores the reported substrings.
+	Substrings []string
 	// Workers is the numer of simultaneous goroutines the parser will use.
 	Workers int
 }
@@ -23,7 +26,7 @@ type Parser struct {
 func (p *Parser) Parse(ctx context.Context, r io.Reader, out chan<- string, errs chan<- error) {
 	defer close(out)
 
-	gz, err := gzip.NewReader(r)
+	gz, err := pgzip.NewReader(r)
 	if err != nil {
 		errs <- err
 		return
@@ -49,7 +52,7 @@ func (p *Parser) Parse(ctx context.Context, r io.Reader, out chan<- string, errs
 						continue
 					}
 
-					if p.IsInterestingRecord(e) && p.IsInterestingDomain(e) {
+					if p.Substring(e) || (p.IsInterestingDomain(e) && p.IsInterestingRecord(e)) {
 						out <- e.Name
 					}
 				}
@@ -89,10 +92,20 @@ func (p *Parser) IsInterestingRecord(e entry) bool {
 	return false
 }
 
-// IsInterestingDomain reports if the domain contains an interesting domain.
+// IsInterestingDomain reports if the domain is a subdomain of the provided domains.
 func (p *Parser) IsInterestingDomain(e entry) bool {
 	for _, d := range p.Domains {
 		if strings.HasSuffix(e.Name, d) {
+			return true
+		}
+	}
+	return false
+}
+
+// Substring reports if the domain contains an interesting substring.
+func (p *Parser) Substring(e entry) bool {
+	for _, sb := range p.Substrings {
+		if strings.Contains(e.Name, sb) {
 			return true
 		}
 	}

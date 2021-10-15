@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 
 	flag "github.com/spf13/pflag"
 
@@ -20,6 +21,7 @@ func main() {
 	url := flag.String("url", "", "URL of the dataset (can't be used with file)")
 	records := flag.StringSlice("records", []string{}, "records that will be parsed a|aaaa|cname|ns|ptr")
 	domains := flag.StringSlice("domains", []string{}, "domains of which subdomains are discovered")
+	substrings := flag.StringSlice("substrings", []string{}, "substrings to match (ignores record types)")
 	verbose := flag.Bool("verbose", false, "enable verbose error messages")
 
 	flag.Parse()
@@ -29,31 +31,13 @@ func main() {
 		return
 	}
 
-	var l logger
-	l = silentLogger{}
+	var l logger = silentLogger{}
 	if *verbose {
 		l = verboseLogger{}
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	c := make(chan os.Signal)
-	defer close(c)
-	signal.Notify(c, os.Interrupt)
-
-	go func() {
-		for {
-			select {
-			case <-c:
-				log.Println("Received SIGINT")
-				cancel()
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	var r io.ReadCloser
 	if *url != "" {
@@ -88,9 +72,10 @@ func main() {
 	defer r.Close()
 
 	parser := &fdns.Parser{
-		Domains: *domains,
-		Workers: *goroutines,
-		Records: *records,
+		Domains:    *domains,
+		Workers:    *goroutines,
+		Records:    *records,
+		Substrings: *substrings,
 	}
 	out := make(chan string)
 	errs := make(chan error)

@@ -2,4 +2,4 @@
 .git
 README.md
 LICENSE.md
-cloudbuild.yaml
+entry_easyjson.go

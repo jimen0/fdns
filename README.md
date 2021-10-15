@@ -6,21 +6,22 @@ Package **fdns** parses [Rapid7](https://www.rapid7.com/) [Forward DNS](https://
 
 Behaviour has changed since the project was created. Now `A` record reports DNS names instead of IP addresses.
 
-### Install
+**This project is deprecated and will be used to experiment with non-reflection APIs. Please, do not rely on it being backwards compatible. Docker images might be deleted at any time.**
+
+### Build from source
 
 ```console
-go install github.com/jimen0/fdns/v2/cmd/fdns@latest
-fdns
+go install github.com/mailru/easyjson/...@v0.7.7
+git clone --depth 1 https://github.com/jimen0/fdns.git
+cd fdns
+go generate
+go install cmd/fdns/fdns.go
 ```
 
 ### Run with Docker
 
 ```console
-git clone https://github.com/jimen0/fdns.git
-cd fdns
-docker build -t fdns .
-# Make sure to add your arguments
-docker run --rm fdns
+docker container run --rm -it ghcr.io/jimen0/fdns/fdns:v2.0.2
 ```
 
 ### Usage
@@ -28,23 +29,24 @@ docker run --rm fdns
 ```console
 ➜  fdns
 Usage of fdns:
-      --domains strings   domains of which subdomains are discovered
-      --file string       path of the dataset (can't be used with url)
-      --goroutines int    number of goroutines (default 4)
-      --records strings   records that will be parsed a|aaaa|cname|ns|ptr
-      --url string        URL of the dataset (can't be used with file)
-      --verbose           enable verbose error messages
+      --domains strings      domains of which subdomains are discovered
+      --file string          path of the dataset (can't be used with url)
+      --goroutines int       number of goroutines (default 4)
+      --records strings      records that will be parsed a|aaaa|cname|ns|ptr
+      --substrings strings   substrings to match (ignores record types)
+      --url string           URL of the dataset (can't be used with file)
+      --verbose              enable verbose error messages
 ```
 
 <a href="https://asciinema.org/a/QcyHYCj3z13hn34zoshNshO3x?autoplay=1"><img src="https://asciinema.org/a/QcyHYCj3z13hn34zoshNshO3x.png"/></a>
 
 
 ```console
-docker run \
+docker container run \
   --rm \
   -it \
   fdns \
-    --domains yahoo.com,github.com \
+    --domains .yahoo.com,.github.com \
     --records a,aaaa,cname \
     --goroutines 4 \
     --url https://opendata.rapid7.com/sonar.fdns_v2/2020-07-24-1595549209-fdns_any.json.gz \
